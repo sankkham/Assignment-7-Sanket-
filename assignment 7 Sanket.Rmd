@@ -1,0 +1,140 @@
+---
+title: "Assignment 7 Sanket"
+author: "Sanket"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+#install.packages
+library(readxl)
+library(knitr)
+library(TTR)
+library(dplyr)
+library(ggplot2)
+library(forecast)
+library(tidyverse)
+library(tseries)
+
+# Load the Excel file
+data  <- read.csv("C:/Users/Sanket Khamkar/Downloads/Data Dictionary_Sanket.csv")
+names(data)
+knitr::kable(data)
+head(data)
+
+# Function to convert 'Year_Quarter' to start date for each quarter
+convert_quarter_to_date <- function(quarter) {
+  if (is.na(quarter)) {
+    return(NA)  # Return NA if quarter is missing
+  }
+  year <- as.numeric(substr(quarter, 1, 4))
+  q <- substr(quarter, 6, 7)
+  
+  if (q == "Q1") {
+    return(as.Date(paste0(year, "-01-01")))
+  } else if (q == "Q2") {
+    return(as.Date(paste0(year, "-04-01")))
+  } else if (q == "Q3") {
+    return(as.Date(paste0(year, "-07-01")))
+  } else if (q == "Q4") {
+    return(as.Date(paste0(year, "-10-01")))
+  } else {
+    return(NA)  # Return NA if the quarter is not in a recognized format
+  }
+}
+
+# Apply the conversion to the 'Year Quarter' column
+data$Date <- sapply(data$`Year_Quarter`, convert_quarter_to_date)
+
+# Convert the 'Rate' column to numeric and clean up the data
+data$FertilityRate <- as.numeric(data$FertilityRate)
+data <- data[!is.na(data$Date) & !is.na(data$FertilityRate), ]
+data$MortalityRate <- as.numeric(data$MortalityRate)
+data <- data[!is.na(data$Date) & !is.na(data$MortalityRate), ]
+# Ensure Date column is a factor (or convert as needed)
+data$Date <- as.factor(data$Date)
+
+
+```
+Perform ARIMA on your time series. 
+
+```{r}
+# Filter for 'All races and origins' and set time series
+data_filtered <- subset(data, Group == "All races and origins")
+fertility_ts <- ts(data_filtered$FertilityRate, start = c(2022, 1), frequency = 4)
+
+# Plot the time series
+plot(fertility_ts, main = "Fertility Rate Time Series", ylab = "Fertility Rate", xlab = "Time")
+
+# Determine the number of differences needed to make the series stationary
+d <- ndiffs(fertility_ts)
+cat("Number of differences needed for stationarity: ", d, "\n")
+
+# Display time series characteristics
+tsdisplay(fertility_ts)
+
+fertility_ts_diff1 <- diff(fertility_ts, differences=1)
+plot(fertility_ts_diff1)
+
+
+# Determine the differencing again
+ndiffs(fertility_ts_diff1)
+
+# Fit ARIMA model using auto.arima()
+auto_fit <- auto.arima(fertility_ts, trace = TRUE, stepwise = FALSE)
+print(auto_fit)
+
+# Display attributes of the fitted ARIMA model
+attributes(auto_fit)
+
+
+```
+1. Explain the output
+
+Data Loading and Filtering: The dataset was loaded, and the time series of fertility rates was filtered for "All races and origins."
+
+Stationarity Check: Looked at how many times I needed to "difference" the data to make it stationary, which means making it stable without noticeable trends or seasonality. It needed one round of differencing.
+
+ARIMA Model Fit: Used an automatic function to fit the best ARIMA model, which helps predict future values by considering trends and random patterns. The best model found was displayed, showing the AR, differencing, and MA components.
+
+
+2. Run Residual Analysis
+```{r}
+# Residual Analysis
+# Plot ACF of residuals
+Acf(auto_fit$residuals, main = "ACF of Residuals")
+
+# Ljung-Box test to check for independence of residuals
+box_test <- Box.test(auto_fit$residuals, lag = 20, type = "Ljung-Box")
+print(box_test)
+
+# Plot residuals and histogram
+par(mfrow = c(2, 1))
+plot.ts(auto_fit$residuals, main = "Residuals of ARIMA Model")
+hist(auto_fit$residuals, main = "Histogram of Residuals", xlab = "Residuals")
+par(mfrow = c(1, 1))
+
+```
+
+3. Perform and Plot the forecast for the next five periods
+```{r}
+
+# Forecast for the next 5 periods and plot the forecast
+plot(forecast(auto_fit, h = 5, level = c(99.5)), main = "Forecast for Next 5 Periods")
+```
+
+
+Forecast: Predicted the fertility rate for the next 5 periods. The forecast plot included a blue line for the predicted values, and a shaded area showed the range in which future values are likely to fall, with a high confidence level of 99.5%.
+
+
+4. Show the accuracy of your ARIMA model
+```{r}
+# Show the accuracy of the ARIMA model
+accuracy_metrics <- accuracy(auto_fit)
+print(accuracy_metrics)
+```
+
+
+
